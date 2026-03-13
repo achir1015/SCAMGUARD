@@ -1,7 +1,7 @@
 # SCAMGUARD
     
 AI 詐騙郵件偵測系統 v2.0 — 本地測試版   https://achir1015.github.io/SCAMGUARD/
-
+                                                                                                                            
 下載後的使用步驟：
 第一步：取得 API Key
 前往 console.anthropic.com → API Keys → 建立一組 sk-ant-... 的 Key
