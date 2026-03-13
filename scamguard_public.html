@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SCAMGUARD — AI 詐騙郵件偵測系統（公用版）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#0a0e1a;--surface:#111827;--surface2:#1a2235;
+  --red:#ff3b4e;--red-dim:#3d1219;--red-mid:#ff3b4e33;
+  --amber:#f59e0b;--amber-dim:#2d1f00;
+  --green:#10b981;--green-dim:#052e1c;
+  --blue:#3b82f6;--text:#e2e8f0;--muted:#64748b;--border:#1e293b;
+  --mono:'Space Mono',monospace;--body:'Noto Sans TC',sans-serif;
+}
+
+body{
+  background:var(--bg);color:var(--text);font-family:var(--body);
+  min-height:100vh;display:flex;justify-content:center;padding:2rem 1rem;
+}
+
+.container{width:100%;max-width:700px;}
+
+.topbar{display:flex;align-items:center;gap:14px;margin-bottom:2rem;}
+.logo{width:48px;height:48px;background:var(--red);border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;position:relative;overflow:hidden;}
+.logo::before{content:'';position:absolute;width:100%;height:100%;background:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(0,0,0,.15) 4px,rgba(0,0,0,.15) 8px);}
+.logo svg{width:26px;height:26px;fill:white;position:relative;}
+.brand{font-family:var(--mono);font-size:20px;font-weight:700;letter-spacing:.04em;}
+.brand span{color:var(--red);}
+.version{font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:3px;}
+
+/* API Key Notice */
+.api-notice{
+  background:#1a2235;border:0.5px solid #f59e0b44;border-radius:10px;
+  padding:14px 16px;margin-bottom:20px;font-size:13px;line-height:1.7;
+}
+.api-notice strong{color:var(--amber);}
+.api-notice code{
+  background:#0a0e1a;padding:3px 8px;border-radius:4px;
+  font-family:var(--mono);font-size:12px;color:#94a3b8;
+}
+.api-key-row{display:flex;gap:8px;margin-top:10px;}
+.api-key-row input{
+  flex:1;background:var(--surface);border:0.5px solid var(--border);
+  border-radius:8px;padding:9px 12px;color:var(--text);
+  font-family:var(--mono);font-size:12px;outline:none;
+}
+.api-key-row input:focus{border-color:var(--amber);}
+.api-key-row input::placeholder{color:var(--muted);}
+.btn-save-key{
+  padding:9px 16px;background:var(--amber);color:#0a0e1a;border:none;
+  border-radius:8px;font-family:var(--mono);font-size:12px;font-weight:700;
+  cursor:pointer;white-space:nowrap;
+}
+.btn-save-key:hover{background:#d97706;}
+.key-status{font-size:11px;margin-top:6px;font-family:var(--mono);}
+.key-status.ok{color:var(--green);}
+.key-status.no{color:var(--muted);}
+
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
+@media(max-width:550px){.grid{grid-template-columns:1fr;}}
+
+.field label{font-size:11px;color:var(--muted);font-family:var(--mono);letter-spacing:.06em;text-transform:uppercase;display:block;margin-bottom:6px;}
+.field input,.field textarea{
+  width:100%;background:var(--surface);border:0.5px solid var(--border);
+  border-radius:8px;padding:10px 12px;color:var(--text);font-family:var(--body);
+  font-size:13px;outline:none;resize:none;transition:border-color .15s;
+}
+.field input:focus,.field textarea:focus{border-color:var(--red);}
+.field input::placeholder,.field textarea::placeholder{color:var(--muted);}
+
+.body-field{margin-bottom:14px;}
+.body-field textarea{height:130px;}
+
+.btn-scan{
+  width:100%;padding:14px;background:var(--red);color:white;border:none;
+  border-radius:8px;font-family:var(--mono);font-size:13px;font-weight:700;
+  letter-spacing:.08em;cursor:pointer;transition:all .15s;
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  text-transform:uppercase;margin-bottom:6px;
+}
+.btn-scan:hover:not(:disabled){background:#e02030;transform:translateY(-1px);}
+.btn-scan:disabled{opacity:.5;cursor:not-allowed;transform:none;}
+
+.result-box{
+  margin-top:18px;border-radius:10px;overflow:hidden;
+  border:0.5px solid var(--border);animation:fadeUp .3s ease;
+}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+
+.verdict-bar{padding:14px 18px;display:flex;align-items:center;gap:12px;border-bottom:1px solid;}
+.verdict-bar.scam{background:var(--red-dim);border-color:var(--red);}
+.verdict-bar.warn{background:var(--amber-dim);border-color:var(--amber);}
+.verdict-bar.safe{background:var(--green-dim);border-color:var(--green);}
+
+.verdict-icon{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;font-weight:700;}
+.verdict-icon.scam{background:var(--red);}
+.verdict-icon.warn{background:var(--amber);color:#0a0e1a;}
+.verdict-icon.safe{background:var(--green);}
+
+.verdict-label{font-family:var(--mono);font-size:15px;font-weight:700;letter-spacing:.04em;}
+.verdict-label.scam{color:var(--red);}
+.verdict-label.warn{color:var(--amber);}
+.verdict-label.safe{color:var(--green);}
+
+.risk-meter{margin-left:auto;text-align:right;}
+.risk-num{font-family:var(--mono);font-size:26px;font-weight:700;}
+.risk-num.scam{color:var(--red);}
+.risk-num.warn{color:var(--amber);}
+.risk-num.safe{color:var(--green);}
+.risk-label{font-size:10px;color:var(--muted);font-family:var(--mono);}
+
+.result-body{background:var(--surface);padding:16px 18px;}
+.result-summary{font-size:14px;line-height:1.8;color:var(--text);margin-bottom:14px;}
+
+.signals{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;}
+.signal{font-size:11px;font-family:var(--mono);padding:4px 10px;border-radius:20px;border:0.5px solid;}
+.signal.red{background:var(--red-mid);color:#ff8a94;border-color:#ff3b4e44;}
+.signal.amber{background:var(--amber-dim);color:#fcd34d;border-color:#f59e0b44;}
+.signal.green{background:var(--green-dim);color:#6ee7b7;border-color:#10b98144;}
+
+.advice-box{background:var(--surface2);border-radius:8px;padding:12px 14px;font-size:13px;line-height:1.7;color:#94a3b8;border-left:3px solid;}
+.advice-box.scam{border-color:var(--red);}
+.advice-box.warn{border-color:var(--amber);}
+.advice-box.safe{border-color:var(--green);}
+
+.scanner-anim{padding:24px;text-align:center;margin-top:16px;}
+.scanner-line{height:1px;background:linear-gradient(90deg,transparent,var(--red),transparent);animation:scan 1.5s ease-in-out infinite;margin:8px 0;}
+@keyframes scan{0%,100%{opacity:.2;transform:scaleX(.3);}50%{opacity:1;transform:scaleX(1);}}
+
+.example-btns{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;}
+.ex-btn{font-size:11px;font-family:var(--mono);padding:5px 12px;border-radius:6px;border:0.5px solid var(--border);background:var(--surface2);color:var(--muted);cursor:pointer;transition:all .15s;}
+.ex-btn:hover{border-color:var(--red);color:var(--text);}
+
+.spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:white;border-radius:50%;animation:spin .6s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+.divider{height:0.5px;background:var(--border);margin:20px 0;}
+.history-title{font-size:11px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;}
+.history-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;border:0.5px solid var(--border);margin-bottom:6px;background:var(--surface);}
+.h-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.h-dot.scam{background:var(--red);}
+.h-dot.warn{background:var(--amber);}
+.h-dot.safe{background:var(--green);}
+.h-subj{font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.h-score{font-size:11px;font-family:var(--mono);color:var(--muted);}
+
+.error-box{padding:12px 16px;background:#1a0d10;border:0.5px solid #ff3b4e44;border-radius:8px;color:#ff8a94;font-size:13px;margin-top:14px;line-height:1.7;}
+
+footer{text-align:center;padding:2rem 0 1rem;font-size:11px;color:var(--muted);font-family:var(--mono);}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="topbar">
+    <div class="logo">
+      <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 14l-3-3 1.41-1.41L11 12.17l4.59-4.58L17 9l-6 6z"/></svg>
+    </div>
+    <div>
+      <div class="brand">SCAM<span>GUARD</span></div>
+      <div class="version">AI 詐騙郵件偵測系統 v2.0 — 請輸入您的 API Key</div>
+    </div>
+  </div>
+
+  <!-- API Key Setup -->
+  <div class="api-notice" id="api-notice">
+    <strong>🔑 請輸入您的 Anthropic API Key</strong><br>
+    前往 <code>console.anthropic.com</code> 取得 API Key，輸入後即可開始偵測。<br>
+    <em style="color:var(--muted);font-size:12px;">Key 僅存在瀏覽器記憶體中，關閉頁面即清除，不會外洩。</em>
+    <div class="api-key-row">
+      <input type="password" id="api-key-input" placeholder="sk-ant-api03-..." />
+      <button class="btn-save-key" onclick="saveKey()">確認</button>
+    </div>
+    <div class="key-status no" id="key-status">⚪ 尚未設定 API Key</div>
+  </div>
+
+  <!-- Example Buttons -->
+  <div class="example-btns">
+    <span style="font-size:11px;color:var(--muted);font-family:var(--mono);">範例：</span>
+    <button class="ex-btn" onclick="loadExample('scam')">⚠ 釣魚詐騙</button>
+    <button class="ex-btn" onclick="loadExample('prize')">⚠ 中獎通知</button>
+    <button class="ex-btn" onclick="loadExample('bank')">⚠ 假銀行通知</button>
+    <button class="ex-btn" onclick="loadExample('normal')">✓ 正常郵件</button>
+  </div>
+
+  <!-- Form -->
+  <div class="grid">
+    <div class="field">
+      <label>寄件人 (From)</label>
+      <input id="f-sender" placeholder="sender@domain.com" />
+    </div>
+    <div class="field">
+      <label>主旨 (Subject)</label>
+      <input id="f-subject" placeholder="郵件主旨" />
+    </div>
+  </div>
+  <div class="field body-field">
+    <label>郵件內容 (Body)</label>
+    <textarea id="f-body" placeholder="貼上郵件全文..."></textarea>
+  </div>
+  <div class="field" style="margin-bottom:16px;">
+    <label>附加連結 (選填)</label>
+    <input id="f-links" placeholder="http://suspicious-link.com" />
+  </div>
+
+  <button class="btn-scan" id="btn-scan" onclick="analyze()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+    開始偵測分析
+  </button>
+
+  <div id="result-area"></div>
+  <div id="history-area"></div>
+
+  <footer>SCAMGUARD v2.0 &nbsp;|&nbsp; Powered by Claude AI &nbsp;|&nbsp; 僅供參考，請自行判斷</footer>
+</div>
+
+<script>
+let apiKey = '';
+const history = [];
+
+function saveKey() {
+  const val = document.getElementById('api-key-input').value.trim();
+  if (!val.startsWith('sk-ant-')) {
+    document.getElementById('key-status').textContent = '⚠ 格式錯誤，Key 應以 sk-ant- 開頭';
+    document.getElementById('key-status').className = 'key-status no';
+    return;
+  }
+  apiKey = val;
+  document.getElementById('key-status').textContent = '✓ API Key 已設定，可以開始偵測！';
+  document.getElementById('key-status').className = 'key-status ok';
+  document.getElementById('api-notice').style.borderColor = '#10b98144';
+  document.getElementById('api-key-input').value = '●●●●●●●●●●●●●●●●';
+  document.getElementById('api-key-input').disabled = true;
+  document.querySelector('.btn-save-key').textContent = '已儲存';
+  document.querySelector('.btn-save-key').disabled = true;
+  document.querySelector('.btn-save-key').style.background = 'var(--green)';
+}
+
+const examples = {
+  scam: {
+    sender: 'service-noreply@paypa1-secure.com',
+    subject: '【緊急】您的帳戶已被凍結，請立即驗證',
+    body: '親愛的用戶您好，\n\n我們偵測到您的帳戶有異常登入行為。為保護您的帳戶安全，請在24小時內點擊以下連結重新驗證您的身份，否則帳戶將永久停用。\n\n請立即點擊：http://paypa1-verify-account.xyz/login\n\n如未在規定時間內完成，您的資金將凍結。',
+    links: 'http://paypa1-verify-account.xyz/login'
+  },
+  prize: {
+    sender: 'lottery-winner2024@gmail-prizes.net',
+    subject: '恭喜！您已中得台灣彩券頭獎 NT$5,000,000',
+    body: '恭喜您！\n\n您的電子郵件在本次抽獎活動中獲選為頭獎得主，獎金為新台幣五百萬元整。\n\n請提供您的姓名、身分證號碼、銀行帳號，並繳交手續費NT$3,000以領取獎金。\n\n此機會千載難逢，請勿告知他人以免獎項被取消。',
+    links: ''
+  },
+  bank: {
+    sender: 'security@cathaybank-verify.com',
+    subject: '[國泰世華] 安全驗證通知 - 請立即處理',
+    body: '國泰世華銀行安全通知\n\n我們偵測到您的網路銀行帳戶有可疑活動。為確保帳戶安全，請您點擊下方連結，在30分鐘內完成安全驗證，否則帳戶將被暫停使用。\n\n驗證連結：https://cathay-bank-tw-verify.ru/secure\n\n客服專線：0800-123-456',
+    links: 'https://cathay-bank-tw-verify.ru/secure'
+  },
+  normal: {
+    sender: 'newsletter@amazon.com',
+    subject: '您的 Amazon 訂單已出貨 #123-4567890',
+    body: '親愛的顧客，\n\n感謝您的訂購！您的訂單 #123-4567890 已於今日出貨。\n\n預計送達時間：2-3個工作天\n物流追蹤：請登入您的Amazon帳戶查看。\n\n如有任何問題，歡迎聯繫客服。\n\nAmazon客服團隊',
+    links: ''
+  }
+};
+
+function loadExample(type) {
+  const e = examples[type];
+  document.getElementById('f-sender').value = e.sender;
+  document.getElementById('f-subject').value = e.subject;
+  document.getElementById('f-body').value = e.body;
+  document.getElementById('f-links').value = e.links;
+}
+
+async function analyze() {
+  if (!apiKey) {
+    document.getElementById('result-area').innerHTML = '<div class="error-box">請先設定 Anthropic API Key（sk-ant-...）才能使用偵測功能。</div>';
+    return;
+  }
+
+  const sender = document.getElementById('f-sender').value.trim();
+  const subject = document.getElementById('f-subject').value.trim();
+  const body = document.getElementById('f-body').value.trim();
+  const links = document.getElementById('f-links').value.trim();
+
+  if (!sender && !subject && !body) {
+    document.getElementById('result-area').innerHTML = '<div class="error-box">請至少填入寄件人、主旨或郵件內容。</div>';
+    return;
+  }
+
+  const btn = document.getElementById('btn-scan');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div> AI 分析中...';
+
+  document.getElementById('result-area').innerHTML = `
+    <div class="scanner-anim">
+      <div class="scanner-line"></div>
+      <div style="font-family:var(--mono);font-size:12px;color:var(--muted);margin:12px 0;">掃描詐騙特徵中，請稍候...</div>
+      <div class="scanner-line"></div>
+    </div>`;
+
+  try {
+    const prompt = `你是一個專業的郵件詐騙偵測 AI，請分析以下電子郵件是否為詐騙郵件。
+
+寄件人：${sender || '未提供'}
+主旨：${subject || '未提供'}
+內容：${body || '未提供'}
+附加連結：${links || '無'}
+
+請以 JSON 格式回傳（不要加任何 markdown 符號或反引號）：
+{
+  "verdict": "scam 或 warn 或 safe",
+  "risk_score": 0到100的整數,
+  "summary": "2-3句繁體中文摘要，說明為何給出此判定",
+  "signals": ["偵測到的警示訊號1（繁體中文，簡短）", "訊號2", "訊號3"],
+  "signal_types": ["red 或 amber 或 green（對應每個訊號的嚴重度）"],
+  "advice": "給用戶的具體建議（繁體中文，1-2句）"
+}
+
+判定標準：
+- scam：高度可疑詐騙（風險70+）— 釣魚連結、假冒機構、索取個資、製造恐慌
+- warn：需要注意（30-69）— 部分可疑但未完全確認
+- safe：正常安全（0-29）— 來自可信來源、內容正常`;
+
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.error?.message || 'API 請求失敗 (' + resp.status + ')');
+    }
+
+    const data = await resp.json();
+    const text = (data.content || []).map(b => b.text || '').join('').replace(/```json|```/g, '').trim();
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('無法解析 AI 回應');
+    const result = JSON.parse(match[0]);
+
+    const icons = { scam: '✕', warn: '!', safe: '✓' };
+    const labels = { scam: '⚠ 高風險詐騙', warn: '注意可疑', safe: '✓ 安全郵件' };
+
+    const signalsHtml = (result.signals || []).map((s, i) =>
+      `<span class="signal ${(result.signal_types || [])[i] || 'amber'}">${s}</span>`
+    ).join('');
+
+    document.getElementById('result-area').innerHTML = `
+      <div class="result-box">
+        <div class="verdict-bar ${result.verdict}">
+          <div class="verdict-icon ${result.verdict}">${icons[result.verdict] || '?'}</div>
+          <div>
+            <div class="verdict-label ${result.verdict}">${labels[result.verdict] || result.verdict}</div>
+            <div style="font-size:12px;color:var(--muted);font-family:var(--mono);margin-top:2px;">${subject || '（無主旨）'}</div>
+          </div>
+          <div class="risk-meter">
+            <div class="risk-num ${result.verdict}">${result.risk_score}</div>
+            <div class="risk-label">風險指數 / 100</div>
+          </div>
+        </div>
+        <div class="result-body">
+          <div class="result-summary">${result.summary}</div>
+          ${signalsHtml ? `<div class="signals">${signalsHtml}</div>` : ''}
+          <div class="advice-box ${result.verdict}">💡 ${result.advice}</div>
+        </div>
+      </div>`;
+
+    history.unshift({ verdict: result.verdict, subject: subject || '（無主旨）', score: result.risk_score });
+    if (history.length > 8) history.pop();
+    renderHistory();
+
+  } catch(e) {
+    document.getElementById('result-area').innerHTML = `<div class="error-box"><strong>分析失敗：</strong>${e.message}<br><br>請確認 API Key 是否正確，以及網路連線是否正常。</div>`;
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg> 開始偵測分析';
+}
+
+function renderHistory() {
+  if (!history.length) return;
+  document.getElementById('history-area').innerHTML = `
+    <div class="divider"></div>
+    <div class="history-title">偵測紀錄</div>
+    ${history.map(h => `
+      <div class="history-item">
+        <div class="h-dot ${h.verdict}"></div>
+        <div class="h-subj">${h.subject}</div>
+        <div class="h-score">${h.score} / 100</div>
+      </div>`).join('')}`;
+}
+</script>
+</body>
+</html>
